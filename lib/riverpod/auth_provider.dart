@@ -30,11 +30,9 @@ class AuthProvider extends ChangeNotifier {
       GithubAuthProvider githubAuthProvider = GithubAuthProvider();
       githubAuthProvider.addScope('repo');
       githubAuthProvider.addScope('public_repo');
-      
-      // Set custom redirect URL if needed
-      // Note: Firebase Auth typically handles redirect URLs automatically
       githubAuthProvider.setCustomParameters({
-      'redirect_uri': 'https://fluttergin1212.firebaseapp.com/__/auth/handler'});
+        'redirect_uri': 'https://fluttergin1212.firebaseapp.com/__/auth/handler'
+      });
 
       final userCredential =
           await FirebaseAuth.instance.signInWithProvider(githubAuthProvider);
@@ -44,9 +42,13 @@ class AuthProvider extends ChangeNotifier {
       _authStatus = AuthStatus.authenticated;
       notifyListeners();
     } catch (e) {
-      printInDebug(e.toString());
+      String errorMsg = e.toString();
+      if (errorMsg.contains('invalid-cert-hash')) {
+        errorMsg +=
+            '\nFirebase Auth error: Please add your SHA-1 and SHA-256 fingerprints to your Firebase project settings and download the updated google-services.json.';
+      }
+      printInDebug(errorMsg);
       _authStatus = AuthStatus.initial;
-
       notifyListeners();
     }
   }

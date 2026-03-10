@@ -14,9 +14,12 @@ import 'package:hive_flutter/hive_flutter.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-      options: DefaultFirebaseOptions
-          .currentPlatform); //flutterfire config (firebase_options.dart)
+  // Check if Firebase is already initialized to prevent duplicate app error
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions
+            .currentPlatform); //flutterfire config (firebase_options.dart)
+  }
   await Hive.initFlutter();
 
   Hive.registerAdapter(RepoAdapter());
