@@ -15,6 +15,85 @@ class GitOperations {
         'X-GitHub-Api-Version': '2022-11-28',
       };
 
+  Future<List<dynamic>> _getPaginatedList(String url) async {
+    final items = <dynamic>[];
+    var page = 1;
+
+    while (true) {
+      final separator = url.contains('?') ? '&' : '?';
+      final paginatedUrl = '$url${separator}page=$page&per_page=100';
+      final response = await http.get(
+        Uri.parse(paginatedUrl),
+        headers: _defaultHeaders,
+      );
+
+      printInDebug('Paginated request: $paginatedUrl -> ${response.statusCode}');
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed paginated GitHub request ($paginatedUrl): ${response.statusCode} ${response.body}',
+        );
+      }
+
+      final pageItems = json.decode(response.body) as List<dynamic>;
+      items.addAll(pageItems);
+
+      if (pageItems.length < 100) {
+        return items;
+      }
+
+      page++;
+    }
+  }
+
+  Map<String, dynamic> _withRoleName(
+    Map<String, dynamic> user,
+    String roleName,
+  ) {
+    return {
+      ...user,
+      'role_name': (user['role_name'] as String?)?.isNotEmpty == true
+          ? user['role_name']
+          : roleName,
+    };
+  }
+
+  List<dynamic> _mergeUniqueUsers(List<List<dynamic>> userLists) {
+    final merged = <String, Map<String, dynamic>>{};
+
+    for (final users in userLists) {
+      for (final user in users) {
+        if (user is! Map) {
+          continue;
+        }
+
+        final userMap = Map<String, dynamic>.from(user as Map);
+        final login = (userMap['login'] ?? '') as String;
+        if (login.isEmpty) {
+          continue;
+        }
+
+        final existing = merged[login];
+        if (existing == null) {
+          merged[login] = userMap;
+          continue;
+        }
+
+        merged[login] = {
+          ...userMap,
+          ...existing,
+          if ((existing['role_name'] as String?)?.isNotEmpty == true)
+            'role_name': existing['role_name'],
+          if ((existing['permissions'] as Map?)?.isNotEmpty == true)
+            'permissions': existing['permissions'],
+        };
+      }
+    }
+
+    return merged.values.toList()
+      ..sort((a, b) => ((a['login'] ?? '') as String).compareTo((b['login'] ?? '') as String));
+  }
+
   // Fetch full user information
   Future<Map<String, dynamic>> getUserInfo() async {
     final response = await http.get(
@@ -259,22 +338,15 @@ class GitOperations {
     printInDebug('Fetching collaborators for $owner/$repo');
     final url = 'https://api.github.com/repos/$owner/$repo/collaborators';
     printInDebug('API URL: $url');
-    
-    final response = await http.get(
-      Uri.parse(url),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    );
+
+    final response = await http.get(Uri.parse('$url?page=1&per_page=100'), headers: _defaultHeaders);
 
     printInDebug('Response status: ${response.statusCode}');
     printInDebug('Response body length: ${response.body.length}');
     printInDebug('Response headers: ${response.headers}');
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = await _getPaginatedList(url);
       printInDebug('Successfully fetched ${data.length} collaborators for $owner/$repo');
       
       // Debug: Show first few collaborators
@@ -312,27 +384,58 @@ class GitOperations {
     printInDebug('Fetching contributors for $owner/$repo');
     final url = 'https://api.github.com/repos/$owner/$repo/contributors';
     printInDebug('Contributors API URL: $url');
-    
-    final response = await http.get(
-      Uri.parse(url),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    );
+
+    final response =
+        await http.get(Uri.parse('$url?page=1&per_page=100'), headers: _defaultHeaders);
 
     printInDebug('Contributors response status: ${response.statusCode}');
     printInDebug('Contributors response body length: ${response.body.length}');
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = await _getPaginatedList(url);
       printInDebug('Successfully fetched ${data.length} contributors for $owner/$repo');
       return data;
     } else {
       printInDebug('Failed to fetch contributors: ${response.statusCode} - ${response.body}');
       return [];
     }
+  }
+
+  Future<List<dynamic>> getRepoPullRequestAuthors(String owner, String repo) async {
+    printInDebug('Fetching pull request authors for $owner/$repo');
+    final url = 'https://api.github.com/repos/$owner/$repo/pulls?state=all';
+    printInDebug('Pull requests API URL: $url');
+
+    final response =
+        await http.get(Uri.parse('$url&page=1&per_page=100'), headers: _defaultHeaders);
+
+    printInDebug('Pull requests response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final pullRequests = await _getPaginatedList(url);
+      final authors = <dynamic>[];
+
+      for (final pr in pullRequests) {
+        if (pr is! Map) {
+          continue;
+        }
+
+        final user = pr['user'];
+        if (user is! Map) {
+          continue;
+        }
+
+        authors.add(_withRoleName(Map<String, dynamic>.from(user), 'Pull request author'));
+      }
+
+      printInDebug('Successfully fetched ${authors.length} PR authors for $owner/$repo');
+      return authors;
+    }
+
+    printInDebug(
+      'Failed to fetch pull request authors: ${response.statusCode} - ${response.body}',
+    );
+    return [];
   }
 
   // Fetch collaborators for multiple repositories
@@ -348,8 +451,21 @@ class GitOperations {
 
       try {
         final collaborators = await getRepoCollaborators(owner, repo);
-        collaboratorsMap[repo] = collaborators;
-        printInDebug('Successfully added ${collaborators.length} collaborators for $repo');
+        final contributors = await getRepoContributors(owner, repo);
+        final pullRequestAuthors = await getRepoPullRequestAuthors(owner, repo);
+
+        collaboratorsMap[repo] = _mergeUniqueUsers([
+          collaborators
+              .map((user) => _withRoleName(Map<String, dynamic>.from(user as Map), 'Collaborator'))
+              .toList(),
+          contributors
+              .map((user) => _withRoleName(Map<String, dynamic>.from(user as Map), 'Contributor'))
+              .toList(),
+          pullRequestAuthors,
+        ]);
+        printInDebug(
+          'Successfully added ${collaboratorsMap[repo]!.length} combined collaborators for $repo',
+        );
       } catch (e) {
         printInDebug('Error fetching collaborators for $repo: $e');
         // Continue with other repositories even if one fails
