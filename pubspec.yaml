@@ -24,7 +24,7 @@ dependencies:
   print_slayer: ^1.1.0
   printing: ^5.13.2
   riverpod_annotation: ^2.3.5
-  riverpod_generator: ^2.4.3
+  riverpod_generator: ^2.4.0
   screenshot: ^3.0.0
   share_plus: ^10.0.2
   shared_preferences: null
