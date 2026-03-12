@@ -9,15 +9,17 @@ class GitOperations {
 
   GitOperations({required this.token});
 
+  Map<String, String> get _defaultHeaders => {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      };
+
   // Fetch full user information
   Future<Map<String, dynamic>> getUserInfo() async {
     final response = await http.get(
       Uri.parse('https://api.github.com/user'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+      headers: _defaultHeaders,
     );
     
     if (response.statusCode == 200) {
@@ -31,11 +33,7 @@ class GitOperations {
   Future<List<dynamic>> getUserOrganizations() async {
     final response = await http.get(
       Uri.parse('https://api.github.com/user/orgs'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+      headers: _defaultHeaders,
     );
     
     if (response.statusCode == 200) {
@@ -47,19 +45,31 @@ class GitOperations {
 
   // Fetch repositories for a specific organization
   Future<List<dynamic>> getOrganizationRepositories(String orgName) async {
-    final response = await http.get(
-      Uri.parse('https://api.github.com/orgs/$orgName/repos'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    );
-    
-    if (response.statusCode == 200) {
-      return json.decode(response.body);
-    } else {
-      throw Exception('Failed to load organization repositories: ${response.body}');
+    final repos = <dynamic>[];
+    var page = 1;
+
+    while (true) {
+      final response = await http.get(
+        Uri.parse(
+          'https://api.github.com/orgs/$orgName/repos?page=$page&per_page=100',
+        ),
+        headers: _defaultHeaders,
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to load organization repositories: ${response.body}',
+        );
+      }
+
+      final pageRepos = json.decode(response.body) as List<dynamic>;
+      repos.addAll(pageRepos);
+
+      if (pageRepos.length < 100) {
+        return repos;
+      }
+
+      page++;
     }
   }
 
@@ -118,11 +128,7 @@ class GitOperations {
 
     final response = await http.get(
       Uri.parse(url),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+      headers: _defaultHeaders,
     );
     
     if (response.statusCode == 200) {
@@ -133,16 +139,30 @@ class GitOperations {
   }
 
   Future<List<dynamic>> listRepositories(bool showPrivateRepos) async {
-    final response = await http.get(
-      Uri.parse(showPrivateRepos
-          ? 'https://api.github.com/user/repos?visibility=all'
-          : 'https://api.github.com/user/repos'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (response.statusCode == 200) {
-      return json.decode(response.body);
-    } else {
-      throw Exception('Failed to load repositories');
+    final repos = <dynamic>[];
+    var page = 1;
+
+    while (true) {
+      final visibilityQuery = showPrivateRepos ? '&visibility=all' : '';
+      final response = await http.get(
+        Uri.parse(
+          'https://api.github.com/user/repos?page=$page&per_page=100$visibilityQuery',
+        ),
+        headers: _defaultHeaders,
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load repositories: ${response.body}');
+      }
+
+      final pageRepos = json.decode(response.body) as List<dynamic>;
+      repos.addAll(pageRepos);
+
+      if (pageRepos.length < 100) {
+        return repos;
+      }
+
+      page++;
     }
   }
 
