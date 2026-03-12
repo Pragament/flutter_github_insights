@@ -21,6 +21,11 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
   final Set<String> _selectedExtensions = {}; // Holds selected extensions
   bool _selectAll = true; // Select All flag
   String _selectedMetric = 'Additions'; // Default metric
+  String _selectedChartType = 'Line';
+  bool _showArea = true;
+  bool _showDots = false;
+  bool _isCurved = true;
+  bool _showGrid = false;
 
   final ScreenshotController _screenshotController =
       ScreenshotController(); // Screenshot controller
@@ -56,14 +61,21 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
 
           final distinctExtensions =
               _getDistinctFileExtensions(repositoryCommits);
+          final availableExtensions = distinctExtensions.toSet();
 
           if (_selectAll && _selectedExtensions.isEmpty) {
             _selectedExtensions.addAll(distinctExtensions);
           }
 
-          // Prepare chart data for area chart
-          final lineChartData = _prepareLineChartData(
-              repositoryCommits, _selectedExtensions, _selectedMetric);
+          _selectedExtensions.removeWhere(
+            (extension) => !availableExtensions.contains(extension),
+          );
+
+          final chartSeries = _prepareChartSeries(
+            repositoryCommits,
+            _selectedExtensions,
+            _selectedMetric,
+          );
 
           final totalValues = _calculateTotalValues(
               repositoryCommits, _selectedExtensions, _selectedMetric);
@@ -72,57 +84,128 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DropdownButton<String>(
-                      value: _selectedMetric,
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedMetric = newValue ?? 'Additions';
-                        });
-                      },
-                      items: <String>['Additions', 'Deletions', 'Commits']
-                          .map<DropdownMenuItem<String>>((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
+                    Text(
+                      'Chart controls',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          if (_selectedMetric == 'Additions') ...[
-                            Text(
-                              'Additions: ${totalValues['additions']}',
-                              style: const TextStyle(color: Colors.green),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Deletions: ${totalValues['deletions']}',
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ] else if (_selectedMetric == 'Deletions') ...[
-                            Text(
-                              'Additions: ${totalValues['additions']}',
-                              style: const TextStyle(color: Colors.green),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Deletions: ${totalValues['deletions']}',
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ] else ...[
-                            Text(
-                              'Commits: ${totalValues['commits']}',
-                              style: const TextStyle(color: Colors.blue),
-                            ),
-                          ],
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        DropdownButton<String>(
+                          value: _selectedMetric,
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              _selectedMetric = newValue ?? 'Additions';
+                            });
+                          },
+                          items: <String>['Additions', 'Deletions', 'Commits']
+                              .map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                        ),
+                        DropdownButton<String>(
+                          value: _selectedChartType,
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              _selectedChartType = newValue ?? 'Line';
+                            });
+                          },
+                          items: <String>['Line', 'Bar']
+                              .map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        if (_selectedMetric == 'Additions') ...[
+                          Text(
+                            'Additions: ${totalValues['additions']}',
+                            style: const TextStyle(color: Colors.green),
+                          ),
+                          Text(
+                            'Deletions: ${totalValues['deletions']}',
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ] else if (_selectedMetric == 'Deletions') ...[
+                          Text(
+                            'Additions: ${totalValues['additions']}',
+                            style: const TextStyle(color: Colors.green),
+                          ),
+                          Text(
+                            'Deletions: ${totalValues['deletions']}',
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ] else ...[
+                          Text(
+                            'Commits: ${totalValues['commits']}',
+                            style: const TextStyle(color: Colors.blue),
+                          ),
                         ],
-                      ),
-                    )
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        FilterChip(
+                          label: const Text('Show grid'),
+                          selected: _showGrid,
+                          onSelected: (selected) {
+                            setState(() {
+                              _showGrid = selected;
+                            });
+                          },
+                        ),
+                        FilterChip(
+                          label: const Text('Show dots'),
+                          selected: _showDots,
+                          onSelected: (selected) {
+                            setState(() {
+                              _showDots = selected;
+                            });
+                          },
+                        ),
+                        FilterChip(
+                          label: const Text('Curved line'),
+                          selected: _isCurved,
+                          onSelected: _selectedChartType == 'Line'
+                              ? (selected) {
+                                  setState(() {
+                                    _isCurved = selected;
+                                  });
+                                }
+                              : null,
+                        ),
+                        FilterChip(
+                          label: const Text('Filled area'),
+                          selected: _showArea,
+                          onSelected: _selectedChartType == 'Line'
+                              ? (selected) {
+                                  setState(() {
+                                    _showArea = selected;
+                                  });
+                                }
+                              : null,
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -132,74 +215,7 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
                   controller: _screenshotController,
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
-                    child: LineChart(
-                      LineChartData(
-                        gridData: const FlGridData(show: false),
-                        borderData: FlBorderData(
-                          show: true,
-                          border: Border.all(
-                            color: const Color(0xff37434d),
-                            width: 1,
-                          ),
-                        ),
-                        lineBarsData: [
-                          lineChartData
-                        ], // Set the area chart data here
-                        titlesData: FlTitlesData(
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize:
-                                  60, // Increased reserved size to fit rotated labels
-                              getTitlesWidget: (value, meta) {
-                                final date =
-                                    DateTime.fromMillisecondsSinceEpoch(
-                                        value.toInt());
-                                return SideTitleWidget(
-                                  axisSide: meta.axisSide,
-                                  child: RotatedBox(
-                                    quarterTurns:
-                                        1, // Rotate the text 90 degrees
-                                    child: Text('${date.month}/${date.day}',
-                                        style: const TextStyle(fontSize: 10)),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 40,
-                              getTitlesWidget: (value, meta) {
-                                final textStyle = Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      fontSize: 10, // Smaller font size
-                                    );
-                                return SideTitleWidget(
-                                  axisSide: meta.axisSide,
-                                  child: textStyle != null
-                                      ? Text('${value.toInt()}',
-                                          style: textStyle)
-                                      : Text('${value.toInt()}'),
-                                );
-                              },
-                            ),
-                          ),
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                        ),
-                        lineTouchData: const LineTouchData(
-                          touchTooltipData: LineTouchTooltipData(),
-                        ),
-                      ),
-                    ),
+                    child: _buildChart(context, chartSeries),
                   ),
                 ),
               ),
@@ -233,10 +249,8 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
                           } else {
                             _selectedExtensions.remove(fileExtension);
                           }
-                          if (!_selectedExtensions
-                              .containsAll(distinctExtensions)) {
-                            _selectAll = false;
-                          }
+                          _selectAll = _selectedExtensions.length ==
+                              distinctExtensions.length;
                         });
                       },
                     );
@@ -252,7 +266,44 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
     );
   }
 
-  LineChartBarData _prepareLineChartData(
+  Widget _buildChart(BuildContext context, List<_ChartPoint> chartSeries) {
+    if (_selectedChartType == 'Bar') {
+      return BarChart(
+        BarChartData(
+          gridData: FlGridData(show: _showGrid),
+          borderData: _buildBorderData(),
+          titlesData: _buildTitlesData(context),
+          barTouchData: BarTouchData(
+            enabled: true,
+            touchTooltipData: BarTouchTooltipData(
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                final date = DateTime.fromMillisecondsSinceEpoch(group.x.toInt());
+                return BarTooltipItem(
+                  '${date.month}/${date.day}: ${rod.toY.toInt()}',
+                  const TextStyle(color: Colors.white),
+                );
+              },
+            ),
+          ),
+          barGroups: _prepareBarChartData(chartSeries),
+        ),
+      );
+    }
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(show: _showGrid),
+        borderData: _buildBorderData(),
+        lineBarsData: [_prepareLineChartData(chartSeries, _selectedMetric)],
+        titlesData: _buildTitlesData(context),
+        lineTouchData: const LineTouchData(
+          touchTooltipData: LineTouchTooltipData(),
+        ),
+      ),
+    );
+  }
+
+  List<_ChartPoint> _prepareChartSeries(
     List<RepositoryCommits> repositoryCommits,
     Set<String> extensions,
     String metric,
@@ -287,32 +338,121 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
     final sortedData = dataByDate.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
 
-    final spots = sortedData.map((entry) {
-      return FlSpot(
-          entry.key.millisecondsSinceEpoch.toDouble(), entry.value.toDouble());
-    }).toList();
+    return sortedData
+        .map(
+          (entry) => _ChartPoint(
+            x: entry.key.millisecondsSinceEpoch.toDouble(),
+            y: entry.value.toDouble(),
+          ),
+        )
+        .toList();
+  }
 
-    // Get the bar color based on the metric
+  LineChartBarData _prepareLineChartData(
+    List<_ChartPoint> chartSeries,
+    String metric,
+  ) {
+    final spots = chartSeries
+        .map((entry) => FlSpot(entry.x, entry.y))
+        .toList();
+
     final Color barColor = _getBarColor(metric);
 
     return LineChartBarData(
       spots: spots,
-      isCurved: true,
-      color: barColor, // Use a single dark color for the line
-      barWidth: 2, // Thicker line for better visibility
+      isCurved: _isCurved,
+      color: barColor,
+      barWidth: 2,
       isStrokeCapRound: true,
-      dotData: const FlDotData(show: false),
+      dotData: FlDotData(show: _showDots),
       belowBarData: BarAreaData(
-        show: true,
-        color: barColor.withValues(alpha: 0.4), // Darker gradient for area fill
+        show: _showArea,
+        color: barColor.withValues(alpha: 0.4),
         gradient: LinearGradient(
           colors: [
-            barColor.withValues(alpha: 0.7), // Stronger opacity
-            barColor.withValues(alpha: 0.2), // Darker at the bottom
+            barColor.withValues(alpha: 0.7),
+            barColor.withValues(alpha: 0.2),
           ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
+      ),
+    );
+  }
+
+  List<BarChartGroupData> _prepareBarChartData(List<_ChartPoint> chartSeries) {
+    final color = _getBarColor(_selectedMetric);
+    return chartSeries
+        .map(
+          (entry) => BarChartGroupData(
+            x: entry.x.toInt(),
+            barRods: [
+              BarChartRodData(
+                toY: entry.y,
+                color: color,
+                width: 14,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+            showingTooltipIndicators: const [0],
+          ),
+        )
+        .toList();
+  }
+
+  FlBorderData _buildBorderData() {
+    return FlBorderData(
+      show: true,
+      border: Border.all(
+        color: const Color(0xff37434d),
+        width: 1,
+      ),
+    );
+  }
+
+  FlTitlesData _buildTitlesData(BuildContext context) {
+    return FlTitlesData(
+      bottomTitles: AxisTitles(
+        sideTitles: SideTitles(
+          showTitles: true,
+          reservedSize: 60,
+          getTitlesWidget: (value, meta) {
+            final date = DateTime.fromMillisecondsSinceEpoch(value.toInt());
+            return SideTitleWidget(
+              axisSide: meta.axisSide,
+              child: RotatedBox(
+                quarterTurns: 1,
+                child: Text(
+                  '${date.month}/${date.day}',
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      leftTitles: AxisTitles(
+        sideTitles: SideTitles(
+          showTitles: true,
+          reservedSize: 40,
+          getTitlesWidget: (value, meta) {
+            final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 10,
+                );
+            return SideTitleWidget(
+              axisSide: meta.axisSide,
+              child: textStyle != null
+                  ? Text('${value.toInt()}', style: textStyle)
+                  : Text('${value.toInt()}'),
+            );
+          },
+        ),
+      ),
+      rightTitles: const AxisTitles(
+        sideTitles: SideTitles(showTitles: false),
+      ),
+      topTitles: const AxisTitles(
+        sideTitles: SideTitles(showTitles: false),
       ),
     );
   }
@@ -350,7 +490,7 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
   // Check if a commit contains files with the selected extensions
   bool _commitContainsExtensions(Commit commit, Set<String> extensions) {
     if (extensions.isEmpty) {
-      return true; // No filter if no extension is selected
+      return false;
     }
 
     for (var file in commit.files ?? []) {
@@ -427,4 +567,14 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
         return Colors.green;
     }
   }
+}
+
+class _ChartPoint {
+  const _ChartPoint({
+    required this.x,
+    required this.y,
+  });
+
+  final double x;
+  final double y;
 }
