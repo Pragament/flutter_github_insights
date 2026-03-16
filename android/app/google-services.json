@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "765269707700",
-    "project_id": "githublogindev",
-    "storage_bucket": "githublogindev.appspot.com"
+    "project_number": "25689280273",
+    "project_id": "fluttergin1212",
+    "storage_bucket": "fluttergin1212.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:765269707700:android:e3e61fbcce761df47200e1",
+        "mobilesdk_app_id": "1:25689280273:android:35624e86af2ed127bcc6b0",
         "android_client_info": {
           "package_name": "com.pragament.githubinsights"
         }
@@ -15,26 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB7wAF9jms4mnSOrTTh_nWqWHP4Lq-Yfto"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:765269707700:android:ab44781b2dadbee17200e1",
-        "android_client_info": {
-          "package_name": "com.pragament.resumebuilder"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyB7wAF9jms4mnSOrTTh_nWqWHP4Lq-Yfto"
+          "current_key": "AIzaSyB6UsuuhvJWXapXwooe5d2B1fCSRnJTGcM"
         }
       ],
       "services": {
